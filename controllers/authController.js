@@ -2,7 +2,7 @@ const User = require('../models/Users');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
-const { sendOTPEmail, sendWelcomeEmail, sendForgotPasswordEmail } = require('../utils/emailService');
+const { sendOTPEmail, sendWelcomeEmail, sendForgotPasswordEmail } = require('../utils/sendEmail');
 const { validationResult } = require('express-validator');
 
 // Generate short-lived access token
