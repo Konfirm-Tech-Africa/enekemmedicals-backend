@@ -87,95 +87,110 @@ const handleRegister = async (req, res) => {
 // Login user
 const handleUserLogin = async (req, res) => {
     try {
-      
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({
-        success: false,
-        errors: errors.array(),
-      });
-    }
-    const { email, password } = req.body;
-
-    // Validate input
-    if (!email || !password) {
-      return res.status(400).json({ 
-        success: false,
-        message: "Email and password are required" 
-      });
-    }
-
-    const user = await User.findOne({ email });
-    if (!user) {
-      return res.status(401).json({ 
-        success: false,
-        message: "Invalid email or password" 
-      });
-    }
-
-    const isMatch = await bcrypt.compare(password, user?.password);
-    if (!isMatch) {
-      return res.status(401).json({ 
-        success: false,
-        message: "Invalid email or password" 
-      });
-    }
-
-    if (!user.isEmailVerified || !user.isVerified) {
-      return res.status(403).json({ 
-        success: false,
-        message: "Email not verified. Please verify to login.",
-        requiresVerification: true,
-        email: user.email
-      });
-    }
-
-    const accessToken = generateAccessToken(user);
-    const refreshToken = generateRefreshToken(user);
-
-    // Set cookies
-    res.cookie("accessToken", accessToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "Strict",
-      maxAge: 15 * 60 * 1000,
-    });
-
-    res.cookie("refreshToken", refreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "Strict",
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-    });
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({
+                success: false,
+                errors: errors.array(),
+            });
+        }
         
-    // Update last login
-    user.lastLogin = Date.now();
-    await user.save();
+        const { email, password } = req.body;
 
-    return res.status(200).json({
-      success: true,
-      message: "Login successful",
-      accessToken,
-      refreshToken,
-      user: {
-        id: user._id,
-        fullName: user.fullName,
-        email: user.email,
-        role: user.role,
-        isVerified: user.isVerified,
-        isEmailVerified: user.isEmailVerified,
-        kycVerified: user.kycVerified,
-        avatar: user.avatar,
-        phoneNumber: user.phoneNumber
-      },
-    });
-  } catch (error) {
-    console.error('Login error:', error);
-    return res.status(500).json({ 
-      success: false,
-      message: "Internal server error during login" 
-    });
-  }
+        // Validate input
+        if (!email || !password) {
+            return res.status(400).json({ 
+                success: false,
+                message: "Email and password are required" 
+            });
+        }
+
+        const user = await User.findOne({ email }).select('+password');
+        
+        if (!user) {
+            return res.status(401).json({ 
+                success: false,
+                message: "Invalid email or password" 
+            });
+        }
+
+        // Check if user has a password field
+        if (!user.password) {
+            console.error('User has no password field set:', user.email);
+            return res.status(401).json({ 
+                success: false,
+                message: "Account setup incomplete. Please contact support." 
+            });
+        }
+
+
+        const isMatch = await bcrypt.compare(password, user.password);
+        if (!isMatch) {
+            return res.status(401).json({ 
+                success: false,
+                message: "Invalid email or password" 
+            });
+        }
+
+        if (!user.isEmailVerified || !user.isVerified) {
+            return res.status(403).json({ 
+                success: false,
+                message: "Email not verified. Please verify to login.",
+                requiresVerification: true,
+                email: user.email
+            });
+        }
+
+        const accessToken = generateAccessToken(user);
+        const refreshToken = generateRefreshToken(user);
+
+        // Set cookies
+        res.cookie("accessToken", accessToken, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === "production",
+            sameSite: "Strict",
+            maxAge: 15 * 60 * 1000, // 15 minutes
+        });
+
+        res.cookie("refreshToken", refreshToken, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === "production",
+            sameSite: "Strict",
+            maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+        });
+            
+        // Update last login
+        user.lastLogin = Date.now();
+        await user.save();
+
+        // Remove password from response
+        const userResponse = user.toObject();
+        delete userResponse.password;
+
+        return res.status(200).json({
+            success: true,
+            message: "Login successful",
+            accessToken,
+            refreshToken,
+            user: {
+                id: user._id,
+                fullName: user.fullName,
+                email: user.email,
+                role: user.role,
+                isVerified: user.isVerified,
+                isEmailVerified: user.isEmailVerified,
+                kycVerified: user.kycVerified || false,
+                avatar: user.avatar || null,
+                phoneNumber: user.phoneNumber
+            },
+        });
+    } catch (error) {
+        console.error('Login error:', error);
+        return res.status(500).json({ 
+            success: false,
+            message: "Internal server error during login" 
+        });
+    }
 };
 
 // Get current user
