@@ -55,7 +55,7 @@ const handleRegister = async (req, res) => {
       password: hashedPassword,
       otp,
       otpExpires,
-      role: 'user',
+      role: 'patient',
     });
       
     await user.save();
